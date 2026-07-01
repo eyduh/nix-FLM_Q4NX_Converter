@@ -141,6 +141,16 @@
             "q4nx_name": "model.vision.patch_embd.weight",
             "default_tensor_type": "BF16"
         },
+        "vision_std_scale": {
+            "gguf_name": "v.std_scale",
+            "q4nx_name": "model.vision.patch_embedder.std_scale",
+            "default_tensor_type": "BF16"
+        },
+        "vision_std_bias": {
+            "gguf_name": "v.std_bias",
+            "q4nx_name": "model.vision.patch_embedder.std_bias",
+            "default_tensor_type": "BF16"
+        },
         "vision_attn_k_proj_weight": {
             "gguf_name": "v.blk.{bid}.attn_k.weight",
             "q4nx_name": "model.vision.{bid}.vision_attn.k_proj.weight"
