@@ -1,4 +1,3 @@
-from convert import convert_gguf_to_q4nx
 from ..model_converter import __Q4NX_Converter
 from ..constants import ModelArch
 from gguf import GGUFReader, dequantize, quantize

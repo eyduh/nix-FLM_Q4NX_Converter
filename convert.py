@@ -39,17 +39,14 @@ def main():
     if not input_path:
         parser.error('Input file is required. Use -i <file> or provide as positional argument.')
     
-    # Determine output folder (prioritize flag, then positional)
-    output_folder = args.output_flag or args.output_folder
-    
+    # Determine output folder (prioritize flag, then positional, then input file directory)
+    output_folder = args.output_flag or args.output_folder or os.path.dirname(os.path.abspath(input_path))
+
     # Check if input file exists
     if not os.path.exists(input_path):
         parser.error(f'Input file does not exist: {input_path}')
     
-    # Create output directory if it doesn't exist
-    output_dir = os.path.dirname(output_folder)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_folder, exist_ok=True)
     
     print(f"[INFO] Converting {input_path} to {output_folder}...")
     convert_gguf_to_q4nx(input_path, output_folder, args.force_model_type, weights_type=args.weights_type)

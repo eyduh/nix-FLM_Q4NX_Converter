@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flm-q4nx-converter"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "torch",
+  "einops",
+  "numpy",
+  "safetensors",
+  "mpmath",
+  "gguf",
+]
+
+[dependency-groups]
+dev = [
+  "matplotlib",
+  "ipykernel",
+  "amd-quark",
+  "accelerate",
+  "huggingface-hub[cli]",
+  "transformers",
+]
+
+[project.scripts]
+convert = "convert:main"
+
+[tool.setuptools]
+py-modules = ["convert"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["q4nx*"]

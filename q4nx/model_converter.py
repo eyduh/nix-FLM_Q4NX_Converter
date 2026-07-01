@@ -97,6 +97,7 @@ class __Q4NX_Converter(ABC):
 
 
     def _load_config(self, config_file_path: str = "configs"):
+        config_file_path = os.environ.get("Q4NX_CONFIG_DIR", config_file_path)
         config_path = os.path.join(config_file_path, ModelArchConfigs[self.model_arch])
         print(f"[INFO] Loading Q4NX config from {config_path}")
         self.q4nx_config = json.load(open(config_path))
