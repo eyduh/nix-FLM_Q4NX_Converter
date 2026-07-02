@@ -213,7 +213,7 @@ class GGUFTensor:
             # store the big projection matrices in F16/BF16 rather than a quantized format; those
             # must still be packed, not passed through as raw bf16 (which the engine misreads).
             # If the target is itself unquantized (norms, bf16-stored proj/embeds), keep raw.
-            if default_tensor_type in quantized_targets:
+            if default_tensor_type in quantized_targets and len(self.shape) == 2:
                 if self.tensor_type == GGMLQuantizationType.F32:
                     w = np.ascontiguousarray(self.data.view(np.float32)).reshape(-1, self.shape[0])
                 elif self.tensor_type == GGMLQuantizationType.F16:
