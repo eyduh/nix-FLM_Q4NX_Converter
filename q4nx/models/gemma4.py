@@ -57,6 +57,23 @@ class Gemma4(__Q4NX_Converter, model_arch=ModelArch.GEMMA4):
 
     
     
+    def _quantize_embedding_int8_g32(self, w: torch.Tensor):
+        """Quantize an embedding matrix [rows, cols] to symmetric absmax int8 with
+        group size 32 along the columns, matching the FLM engine's expected format:
+            - weight: int8  [rows, cols]
+            - scale:  f32   [rows, cols // 32]   (scale = absmax_group / 127)
+        """
+        G = 32
+        w = w.to(torch.float32).contiguous()
+        rows, cols = w.shape
+        assert cols % G == 0, f"embedding cols {cols} must be divisible by {G}"
+        wg = w.reshape(rows, cols // G, G)
+        absmax = wg.abs().amax(dim=2, keepdim=True)
+        scale = absmax / 127.0
+        scale_safe = torch.where(scale == 0, torch.ones_like(scale), scale)
+        q = torch.round(wg / scale_safe).clamp(-127, 127).to(torch.int8).reshape(rows, cols)
+        return q.contiguous(), scale.reshape(rows, cols // G).contiguous().to(torch.float32)
+
     def convert(self, q4nx_path: str, weights_type: str = 'language'):
         self.q4nx_tensors = {}
 
@@ -68,17 +85,23 @@ class Gemma4(__Q4NX_Converter, model_arch=ModelArch.GEMMA4):
                 self.q4nx_tensors["lm_head.weight"] = self._pack_q4nx(*unpacked)      
 
             for key, gguf_tensor in self.gguf_tensors.items():
-                if "token_embd.weight"  == gguf_tensor.name: # this should be bf16
+                if "token_embd.weight"  == gguf_tensor.name: # int8 group-32 + f32 scale
                     w = dequantize(gguf_tensor.data, gguf_tensor.tensor_type)
                     w = w * float(self.hidden_size) **0.5
-                    w = torch.from_numpy(w).contiguous().to(torch.bfloat16)
-                    self.q4nx_tensors[self.forward_name_map[gguf_tensor.name]] = w
+                    w = torch.from_numpy(w).contiguous()
+                    name = self.forward_name_map[gguf_tensor.name]
+                    q, scale = self._quantize_embedding_int8_g32(w)
+                    self.q4nx_tensors[name] = q
+                    self.q4nx_tensors[name + ".scale"] = scale
                     continue
                 elif "per_layer_token_embd.weight"  ==  gguf_tensor.name:
                     w = dequantize(gguf_tensor.data, gguf_tensor.tensor_type)
                     w = w*float(self.embedding_length_per_layer_input)**0.5
-                    w = torch.from_numpy(w).contiguous().to(torch.bfloat16)
-                    self.q4nx_tensors[self.forward_name_map[gguf_tensor.name]] = w
+                    w = torch.from_numpy(w).contiguous()
+                    name = self.forward_name_map[gguf_tensor.name]
+                    q, scale = self._quantize_embedding_int8_g32(w)
+                    self.q4nx_tensors[name] = q
+                    self.q4nx_tensors[name + ".scale"] = scale
                     continue
                 elif "per_layer_model_proj.weight" in gguf_tensor.name:
                     unpacked = gguf_tensor.unpack(self.tensor_q4nx_type_map[gguf_tensor.name])
