@@ -202,12 +202,38 @@ class GGUFTensor:
             return default_tensor_type
 
     def unpack(self, default_tensor_type: GGMLQuantizationType) -> np.ndarray:
-        if self.tensor_type == GGMLQuantizationType.F32:
-            return [torch.Tensor(np.array(self.data.view(np.float32)))]
-        elif self.tensor_type == GGMLQuantizationType.F16:
-            return [torch.Tensor(np.array(self.data.view(np.float16).astype(np.float32)))]
-        elif self.tensor_type == GGMLQuantizationType.BF16:
-            return [torch.from_numpy(self.data.copy()).view(torch.bfloat16)]
+        quantized_targets = (
+            GGMLQuantizationType.Q4_0,
+            GGMLQuantizationType.Q4_1,
+            GGMLQuantizationType.Q8_0,
+        )
+        if self.tensor_type in (GGMLQuantizationType.F32, GGMLQuantizationType.F16, GGMLQuantizationType.BF16):
+            # Unquantized source. If the Q4NX target is a quantized type, dequantize to fp32
+            # and re-quantize into it (README: prefer BF16/FP16/Q8_0 sources). Some gguf files
+            # store the big projection matrices in F16/BF16 rather than a quantized format; those
+            # must still be packed, not passed through as raw bf16 (which the engine misreads).
+            # If the target is itself unquantized (norms, bf16-stored proj/embeds), keep raw.
+            if default_tensor_type in quantized_targets:
+                if self.tensor_type == GGMLQuantizationType.F32:
+                    w = np.ascontiguousarray(self.data.view(np.float32)).reshape(-1, self.shape[0])
+                elif self.tensor_type == GGMLQuantizationType.F16:
+                    w = np.ascontiguousarray(self.data.view(np.float16).astype(np.float32)).reshape(-1, self.shape[0])
+                else:  # BF16
+                    w = torch.from_numpy(self.data.copy()).view(torch.bfloat16).to(torch.float32).numpy()
+                    w = np.ascontiguousarray(w).reshape(-1, self.shape[0])
+                data_quantized = quantize(w, default_tensor_type).copy()
+                if default_tensor_type == GGMLQuantizationType.Q4_1:
+                    return self.unpack_q4_1(data_quantized, self.shape[0])
+                elif default_tensor_type == GGMLQuantizationType.Q4_0:
+                    return self.unpack_q4_0(data_quantized, self.shape[0])
+                else:
+                    return self.unpack_q8_0(data_quantized, self.shape[0])
+            if self.tensor_type == GGMLQuantizationType.F32:
+                return [torch.Tensor(np.array(self.data.view(np.float32)))]
+            elif self.tensor_type == GGMLQuantizationType.F16:
+                return [torch.Tensor(np.array(self.data.view(np.float16).astype(np.float32)))]
+            else:
+                return [torch.from_numpy(self.data.copy()).view(torch.bfloat16)]
 
         elif self.tensor_type == GGMLQuantizationType.Q4_0:
             return self.unpack_q4_0(self.data, self.shape[0])
